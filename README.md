@@ -5,6 +5,7 @@ The raspberry pi script to detect if sound is playing in the room.
 
 To ensure the script runs, make sure to include a creds.json in the directory in the following format:
 
+```json
 {
   "stopsound_username": username on stopsound.herokuapp.com,
   "stopsound_password": pw for stopsound account,
