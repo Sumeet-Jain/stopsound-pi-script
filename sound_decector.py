@@ -10,7 +10,14 @@ import pyaudio
 import requests
 import wave
 
-THRESHOLD = 500
+LOGGING = False
+
+def log(string_):
+    if LOGGING:
+        print string_
+
+
+THRESHOLD = 850
 CHUNK_SIZE = 1024
 FORMAT = pyaudio.paInt16
 RATE = 44100
@@ -46,13 +53,13 @@ def send_messages():
 
         contacts = sesh.get(CONTACTS_URL)
         for name, number in contacts.json().items():
-            print "sending a message to %s" % name
+            log( "sending a message to %s" % name)
             voice.send_sms(number, "Dear %s, Stop Sound is notifying that you may be too loud. Contact your nearest neighbor." % name)
-            print "finished"
+            log("finished")
 
 
 def is_loud(sound_data):
-    print max(sound_data)
+    log(max(sound_data))
     return max(sound_data) > THRESHOLD
 
 def normalize(sound_data):
@@ -121,17 +128,21 @@ def monitor_sound():
             if is_loud(sound_data):
                 time_not_hearing = 0
                 time_hearing += time.time() - timestamp
-                print "Sound for %f seconds" % time_hearing
+                log("Sound for %f seconds" % time_hearing)
+                if time_hearing > 5:
+                    print "Sound for %f seconds" % time_hearing
             else:
                 time_not_hearing += time.time() - timestamp
-                print "Stop hearing sound"
+                log("Stop hearing sound")
+                if time_not_hearing > .1:
+                    time_hearing = 0
     finally:
         sample_width = p.get_sample_size(FORMAT)
         stream.stop_stream()
         stream.close()
         p.terminate()
 
-    #send_messages()
+    send_messages()
 
     """`
     # Used to write to file
