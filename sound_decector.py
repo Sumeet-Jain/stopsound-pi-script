@@ -1,15 +1,55 @@
-from sys import byteorder
 from array import array
+import json
 from struct import pack
+from sys import byteorder
 import time
 
+from  bs4 import BeautifulSoup
+from googlevoice import Voice
 import pyaudio
+import requests
 import wave
 
 THRESHOLD = 500
 CHUNK_SIZE = 1024
 FORMAT = pyaudio.paInt16
 RATE = 44100
+TIME_TO_RESPOND = 10
+
+STOPSOUND_URL = 'http://stopsound.herokuapp.com/'
+CONTACTS_URL = STOPSOUND_URL + 'contacts/get_actives/'
+LOGIN_URL = STOPSOUND_URL + 'auth/login/'
+
+with open('creds.json', 'r') as f_:
+    CREDS = json.load(f_)
+
+def send_messages():
+    with requests.Session() as sesh:
+        login_page = sesh.get(LOGIN_URL)
+
+        # Grab csrf token from the form
+        soup = BeautifulSoup(login_page.text)
+        for input_ in soup.find_all('input'):
+            if 'name' in input_.attrs and input_.attrs['name'] == 'csrfmiddlewaretoken':
+                token = input_['value']
+                break;
+
+        login_data = {}
+        login_data['csrfmiddlewaretoken'] = token
+        login_data['username'] = CREDS['stopsound_username']
+        login_data['password'] = CREDS['stopsound_password']
+        login_resp = sesh.post(LOGIN_URL, data=login_data)
+        assert(login_resp.status_code == 200)
+
+        voice = Voice()
+        voice.login(email=CREDS['googlevoice_email'], passwd=CREDS['googlevoice_password'])
+
+        contacts = sesh.get(CONTACTS_URL)
+        for name, number in contacts.json().items():
+            print "sending a message to %s" % name
+            voice.send_sms(number, "Dear %s, Stop Sound is notifying that you may be too loud. Contact your nearest neighbor." % name)
+            print "finished"
+
 
 def is_loud(sound_data):
     print max(sound_data)
@@ -59,14 +99,13 @@ def respond_to_loud_sound():
     pass
 
 def monitor_sound():
-    TIME_TO_RESPOND = 30
-
     p = pyaudio.PyAudio()
     stream = p.open(format=FORMAT, channels=1, rate=RATE,
         input=True, output=True,
         frames_per_buffer=CHUNK_SIZE)
 
     time_hearing = 0
+    time_not_hearing = 0
 
     recording = array('h')
 
@@ -80,19 +119,19 @@ def monitor_sound():
             recording.extend(sound_data)
 
             if is_loud(sound_data):
+                time_not_hearing = 0
                 time_hearing += time.time() - timestamp
                 print "Sound for %f seconds" % time_hearing
             else:
-                time_hearing = 0
+                time_not_hearing += time.time() - timestamp
                 print "Stop hearing sound"
-            #time.sleep(.1)
     finally:
         sample_width = p.get_sample_size(FORMAT)
         stream.stop_stream()
         stream.close()
         p.terminate()
 
-    respond_to_loud_sound()
+    #send_messages()
 
     """`
     # Used to write to file
