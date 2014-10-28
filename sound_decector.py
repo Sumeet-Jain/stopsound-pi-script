@@ -10,18 +10,19 @@ import pyaudio
 import requests
 import wave
 
-LOGGING = False
+LOGGING = True
 
 def log(string_):
     if LOGGING:
         print string_
 
 
-THRESHOLD = 850
+THRESHOLD = -2
 CHUNK_SIZE = 1024
 FORMAT = pyaudio.paInt16
 RATE = 44100
-TIME_TO_RESPOND = 10
+TIME_TO_RESPOND = 20
+AMBIENT_SOUND_TIME = 30
 
 STOPSOUND_URL = 'http://stopsound.herokuapp.com/'
 CONTACTS_URL = STOPSOUND_URL + 'contacts/get_actives/'
@@ -117,6 +118,7 @@ def monitor_sound():
     recording = array('h')
 
     try:
+
         while time_hearing < TIME_TO_RESPOND:
             timestamp = time.time()
             # little endian, signed short
@@ -163,6 +165,39 @@ def record_to_file(path):
         wf.setframerate(RATE)
         wf.writeframes(data)
 
+def set_ambient_threshold():
+    global THRESHOLD
+    p = pyaudio.PyAudio()
+    stream = p.open(format=FORMAT, channels=1, rate=RATE,
+        input=True, output=True,
+        frames_per_buffer=CHUNK_SIZE)
+    
+    recording = array('h')
+    ambient_sound = 0
+
+    print "Calculating ambient sound for %f seconds..." % AMBIENT_SOUND_TIME
+    timestamp = time.time()
+    samples = 0
+    while time.time() - timestamp < AMBIENT_SOUND_TIME:
+        sound_data = array('h', stream.read(CHUNK_SIZE))
+        if byteorder == 'big':
+            sound_data.byteswap()
+        recording.extend(sound_data)
+        ambient_sound += max(sound_data)
+        log(max(sound_data))
+        samples += 1.0
+    ambient_sound = ambient_sound / samples
+    THRESHOLD = ambient_sound + 1000
+    print "Threshold is currently at %f" % THRESHOLD
+
 if __name__ == '__main__':
     print "Sound monitor -- Stop Sound -- Pledge Class -- GOOOOO"
-    monitor_sound()
+    set_ambient_threshold()
+    timestamp = time.time()
+    while time.time() - timestamp < 10:
+        continue
+    while True:
+        monitor_sound()
+        timestamp = time.time()
+        while time.time() - timestamp < 10:
+            continue
