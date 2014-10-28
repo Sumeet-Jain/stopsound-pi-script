@@ -10,7 +10,7 @@ import pyaudio
 import requests
 import wave
 
-LOGGING = False
+LOGGING = True
 
 def log(string_):
     if LOGGING:
