@@ -1,6 +1,6 @@
 from array import array
+from contextlib import contextmanager
 import json
-from struct import pack
 from sys import byteorder
 import time
 
@@ -8,28 +8,35 @@ from  bs4 import BeautifulSoup
 from googlevoice import Voice
 import pyaudio
 import requests
-import wave
 
 LOGGING = True
 
-def log(string_):
+def log(string):
     if LOGGING:
-        print string_
+        print string
 
 
-THRESHOLD = -2
 CHUNK_SIZE = 1024
 FORMAT = pyaudio.paInt16
 RATE = 44100
 TIME_TO_RESPOND = 20
-AMBIENT_SOUND_TIME = 30
+AMBIENT_SOUND_TIME = 10
 
 STOPSOUND_URL = 'http://stopsound.herokuapp.com/'
 CONTACTS_URL = STOPSOUND_URL + 'contacts/get_actives/'
 LOGIN_URL = STOPSOUND_URL + 'auth/login/'
 
-with open('creds.json', 'r') as f_:
-    CREDS = json.load(f_)
+@contextmanager
+def recorder():
+    """ Used to open a recording stream that gets audio from pyaudio """
+    p = pyaudio.PyAudio()
+    stream = p.open(format=FORMAT, channels=1, rate=RATE,
+        input=True, output=True,
+        frames_per_buffer=CHUNK_SIZE)
+    yield stream
+    stream.stop_stream()
+    stream.close()
+    p.terminate()
 
 def send_messages():
     with requests.Session() as sesh:
@@ -43,7 +50,7 @@ def send_messages():
                 break;
 
         login_data = {}
-        login_data['csrfmiddlewaretoken'] = token
+        login_data['csrfmiddlewaretoken'] =  token
         login_data['username'] = CREDS['stopsound_username']
         login_data['password'] = CREDS['stopsound_password']
         login_resp = sesh.post(LOGIN_URL, data=login_data)
@@ -59,65 +66,17 @@ def send_messages():
             log("finished")
 
 
-def is_loud(sound_data):
+def is_loud(sound_data, threshold):
     log(max(sound_data))
-    return max(sound_data) > THRESHOLD
-
-def normalize(sound_data):
-    "Average the volume out"
-    MAXIMUM = 16384
-    times = float(MAXIMUM) / max(abs(i) for i in sound_data)
-
-    r = array('h')
-    for i in sound_data:
-        r.append(int(i*times))
-    return r
-
-def trim(sound_data):
-    "Trim the blank spots at the start and end"
-    def _trim(sound_data):
-        sound_started = False
-        r = array('h')
-
-        for i in sound_data:
-            if not sound_started and abs(i)>THRESHOLD:
-                sound_started = True
-                r.append(i)
-            elif sound_started:
-                r.append(i)
-        return r
-
-    # Trim to the left
-    sound_data = _trim(sound_data)
-
-    # Trim to the right
-    sound_data.reverse()
-    sound_data = _trim(sound_data)
-    sound_data.reverse()
-    return sound_data
-
-def add_silence(sound_data, seconds):
-    "Add silence to the start and end of 'sound_data' of length 'seconds' (float)"
-    r = array('h', [0 for i in xrange(int(seconds*RATE))])
-    r.extend(sound_data)
-    r.extend([0 for i in xrange(int(seconds*RATE))])
-    return r
+    return max(sound_data) > threshold 
 
 def respond_to_loud_sound():
-    pass
+    send_messages()
 
-def monitor_sound():
-    p = pyaudio.PyAudio()
-    stream = p.open(format=FORMAT, channels=1, rate=RATE,
-        input=True, output=True,
-        frames_per_buffer=CHUNK_SIZE)
-
-    time_hearing = 0
-    time_not_hearing = 0
-
-    recording = array('h')
-
-    try:
+def monitor_sound(threshold):
+    with recorder() as stream:
+        time_hearing = 0
+        time_not_hearing = 0
 
         while time_hearing < TIME_TO_RESPOND:
             timestamp = time.time()
@@ -125,9 +84,8 @@ def monitor_sound():
             sound_data = array('h', stream.read(CHUNK_SIZE))
             if byteorder == 'big':
                 sound_data.byteswap()
-            recording.extend(sound_data)
 
-            if is_loud(sound_data):
+            if is_loud(sound_data, threshold):
                 time_not_hearing = 0
                 time_hearing += time.time() - timestamp
                 log("Sound for %f seconds" % time_hearing)
@@ -135,69 +93,40 @@ def monitor_sound():
                     print "Sound for %f seconds" % time_hearing
             else:
                 time_not_hearing += time.time() - timestamp
-                log("Stop hearing sound")
+                #log("Stop hearing sound")
                 if time_not_hearing > .1:
                     time_hearing = 0
-    finally:
-        sample_width = p.get_sample_size(FORMAT)
-        stream.stop_stream()
-        stream.close()
-        p.terminate()
 
     send_messages()
 
-    """`
-    # Used to write to file
-    recording = normalize(recording)
-    recording = trim(recording)
-    recording = add_silence(recording, 0.5)
-    return sample_width, recording
-    """
-
-def record_to_file(path):
-    "Records from the microphone and outputs the resulting data to 'path'"
-    sample_width, data = monitor_sound()
-    data = pack('<' + ('h'*len(data)), *data)
-
-    with wave.open(path, 'wb') as wf:
-        wf.setnchannels(1)
-        wf.setsampwidth(sample_width)
-        wf.setframerate(RATE)
-        wf.writeframes(data)
-
-def set_ambient_threshold():
-    global THRESHOLD
-    p = pyaudio.PyAudio()
-    stream = p.open(format=FORMAT, channels=1, rate=RATE,
-        input=True, output=True,
-        frames_per_buffer=CHUNK_SIZE)
-    
-    recording = array('h')
+def get_ambient_threshold():
     ambient_sound = 0
+    samples = 0.0
 
     print "Calculating ambient sound for %f seconds..." % AMBIENT_SOUND_TIME
-    timestamp = time.time()
-    samples = 0
-    while time.time() - timestamp < AMBIENT_SOUND_TIME:
-        sound_data = array('h', stream.read(CHUNK_SIZE))
-        if byteorder == 'big':
-            sound_data.byteswap()
-        recording.extend(sound_data)
-        ambient_sound += max(sound_data)
-        log(max(sound_data))
-        samples += 1.0
+
+    with recorder() as stream:
+        start = time.time()
+        while time.time() - start < AMBIENT_SOUND_TIME:
+            sound_data = array('h', stream.read(CHUNK_SIZE))
+            if byteorder == 'big':
+                sound_data.byteswap()
+            ambient_sound += max(sound_data)
+            log(max(sound_data))
+            samples += 1.0
+
     ambient_sound = ambient_sound / samples
-    THRESHOLD = ambient_sound + 1000
-    print "Threshold is currently at %f" % THRESHOLD
+    return ambient_sound + 100
 
 if __name__ == '__main__':
-    print "Sound monitor -- Stop Sound -- Pledge Class -- GOOOOO"
-    set_ambient_threshold()
-    timestamp = time.time()
-    while time.time() - timestamp < 10:
-        continue
+    print "Sound monitor -- Stop Sound -- Nu Pledge Class -- GOOOOO"
+    threshold = get_ambient_threshold()
+    print "Threshold is currently at %f" % threshold
+
+    with open('creds.json', 'r') as f_:
+        CREDS = json.load(f_)
+
     while True:
-        monitor_sound()
-        timestamp = time.time()
-        while time.time() - timestamp < 10:
-            continue
+        print "Monitoring Sound"
+        monitor_sound(threshold)
+        time.sleep(10)
