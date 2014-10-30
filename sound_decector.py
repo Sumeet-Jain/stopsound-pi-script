@@ -16,7 +16,7 @@ def log(string):
         print string
 
 
-CHUNK_SIZE = 1024
+CHUNK_SIZE = 512
 FORMAT = pyaudio.paInt16
 RATE = 44100
 TIME_TO_RESPOND = 20
