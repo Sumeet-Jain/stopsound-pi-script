@@ -7,6 +7,7 @@ LEDS = 32
 
 try:
     spi.open(0,0)
+    spi.max_speed_hz = 40000000
 
     buff = [bytearray(3) for x in range(LEDS)]
     gamma = bytearray(256)
@@ -21,7 +22,11 @@ try:
             buff[led][2] = gamma[b]
 
     def update(buff, spi):
-        final_buf = [buff[i][0] for i in range(LEDS)]
+        final_buf = []
+        for led in buff:
+            final_buf.append(led[0])
+            final_buf.append(led[1])
+            final_buf.append(led[2])
         final_buf.append(0)
         print final_buf
         spi.xfer(final_buf)
