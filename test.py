@@ -35,6 +35,8 @@ try:
         update(buff, spi)
         time.sleep(.001)
 finally:
-    fill(1, 1, 1, buff)
-    update(buff, spi)
+    while i in range(500):
+        fill(1, 1, 1, buff)
+        update(buff, spi)
+        time.sleep(.001)
     spi.close()
