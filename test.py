@@ -28,12 +28,13 @@ try:
             final_buf.append(led[1])
             final_buf.append(led[2])
         final_buf.append(0)
-        print final_buf
         spi.xfer(final_buf)
 
     while True:
         fill(0, 0, 0, buff)
         update(buff, spi)
-        time.sleep(.01)
+        time.sleep(.001)
 finally:
+    fill(1, 1, 1, buff)
+    update(buff, spi)
     spi.close()
