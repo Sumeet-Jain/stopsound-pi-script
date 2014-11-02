@@ -58,8 +58,8 @@ class LightsController(object):
 def spi_opener():
     if spidev:
         spi = spidev.SpiDev()
-        spi.max_speed_hz = 40000000
         spi.open(0,0)
+        spi.max_speed_hz = 40000000
         yield spi
         spi.close()
     else:
