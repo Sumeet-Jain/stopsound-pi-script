@@ -31,12 +31,11 @@ try:
         spi.xfer(final_buf)
 
     while True:
-        fill(0, 0, 0, buff)
-        update(buff, spi)
-        time.sleep(.001)
+        for i in range(255):
+            fill(i, i, i, buff)
+            update(buff, spi)
+            time.sleep(.001)
 finally:
-    while i in range(500):
-        fill(1, 1, 1, buff)
-        update(buff, spi)
-        time.sleep(.001)
+    fill(254, 0, 0, buff)
+    update(buff, spi)
     spi.close()
