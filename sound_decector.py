@@ -130,7 +130,7 @@ def monitor_sound(threshold, lights, spi):
                     if is_loud(sound_data, threshold):
                         time_not_hearing = 0
                         time_hearing += now - timestamp
-                        print "Time hearing: %f" % time_hearing
+                        #print "Time hearing: %f" % time_hearing
                     else:
                         time_not_hearing += now - timestamp
                         if time_not_hearing > .1:
@@ -182,9 +182,9 @@ if __name__ == '__main__':
             if spi:
                 while time.time() - start < 10:
                     lights.fill(254, 0, 0)
-                    lights.update()
+                    lights.update(spi)
                     time.sleep(.001)
                     lights.fill(254, 0, 0)
-                    lights.update()
+                    lights.update(spi)
                     time.sleep(.001)
             time.sleep(5)
