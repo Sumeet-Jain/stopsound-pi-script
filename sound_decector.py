@@ -120,26 +120,29 @@ def monitor_sound(threshold):
 
             timestamp = time.time()
             while time_hearing < TIME_TO_RESPOND:
-                # little endian, signed short
-                sound_data = array('h', stream.read(CHUNK_SIZE))
-                if byteorder == 'big':
-                    sound_data.byteswap()
+                try:
+                    sound_data = array('h', stream.read(CHUNK_SIZE))
+                    # little endian, signed short
+                    if byteorder == 'big':
+                        sound_data.byteswap()
+                    now = time.time()
 
-                now = time.time()
-                if is_loud(sound_data, threshold):
-                    time_not_hearing = 0
-                    time_hearing += now - timestamp
-                    #print "Time hearing: %f" % time_hearing
-                else:
-                    time_not_hearing += now - timestamp
-                    if time_not_hearing > .1:
-                        time_hearing = 0
-                timestamp = now
-
-            if spi:
-                lights.fill(0, 0, 0)
-                lights.update(spi)
-                time.sleep(.001)
+                    if is_loud(sound_data, threshold):
+                        time_not_hearing = 0
+                        time_hearing += now - timestamp
+                        #print "Time hearing: %f" % time_hearing
+                    else:
+                        time_not_hearing += now - timestamp
+                        if time_not_hearing > .1:
+                            time_hearing = 0
+                    timestamp = now
+                except IOError:
+                    pass
+                finally:
+                    if spi:
+                        lights.fill(0, 0, 0)
+                        lights.update(spi)
+                        time.sleep(.001)
 
     send_messages()
 
