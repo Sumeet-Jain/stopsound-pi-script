@@ -1,6 +1,7 @@
 from array import array
 from contextlib import contextmanager
 import json
+import itertools
 from sys import byteorder
 import time
 
@@ -8,23 +9,61 @@ from  bs4 import BeautifulSoup
 from googlevoice import Voice
 import pyaudio
 import requests
+try:
+    import spidev
+except ImportError:
+    spidev = None
 
-LOGGING = True
+LOGGING = False
 
 def log(string):
     if LOGGING:
         print string
 
 
+AMBIENT_SOUND_TIME = 10
 CHUNK_SIZE = 512
 FORMAT = pyaudio.paInt16
 RATE = 44100
 TIME_TO_RESPOND = 20
-AMBIENT_SOUND_TIME = 10
 
 STOPSOUND_URL = 'http://stopsound.herokuapp.com/'
 CONTACTS_URL = STOPSOUND_URL + 'contacts/get_actives/'
 LOGIN_URL = STOPSOUND_URL + 'auth/login/'
+
+LEDS = 32
+
+class LightsController(object):
+    
+    def __init__(self, num_leds):
+        self.num_leds = num_leds
+        # Converts rgb values to right byte values.
+        self.gamma = bytearray(256)
+        for i in range(256):
+            self.gamma[i] =  0x80 | int(pow(float(i) / 255.0, 2.5) * 127.0 + 0.5)
+        self.led_buffer = [bytearray(3) for x in range(self.num_leds)]
+
+    def fill(self, r, g, b):
+        for led in self.led_buffer:
+            led[0] = self.gamma[r]
+            led[1] = self.gamma[g]
+            led[2] = self.gamma[b]
+
+    def update(self, spi):
+        final_buff = list(itertools.chain.from_iterable(self.led_buffer))
+        final_buff.append(0)
+        spi.xfer(final_buff)
+
+@contextmanager
+def spi_opener():
+    if spidev:
+        spi = spidev.SpiDev()
+        spi.open(0,0)
+        spi.max_speed_hz = 40000000
+        yield spi
+        spi.close()
+    else:
+        yield
 
 @contextmanager
 def recorder():
@@ -61,13 +100,12 @@ def send_messages():
 
         contacts = sesh.get(CONTACTS_URL)
         for name, number in contacts.json().items():
-            log( "sending a message to %s" % name)
+            print( "sending a message to %s" % name)
             voice.send_sms(number, "Dear %s, Stop Sound is notifying that you may be too loud. Contact your nearest neighbor." % name)
-            log("finished")
+            print("finished")
 
 
 def is_loud(sound_data, threshold):
-    log(max(sound_data))
     return max(sound_data) > threshold 
 
 def respond_to_loud_sound():
@@ -75,27 +113,33 @@ def respond_to_loud_sound():
 
 def monitor_sound(threshold):
     with recorder() as stream:
-        time_hearing = 0
-        time_not_hearing = 0
+        with spi_opener() as spi:
+            lights = LightsController(LEDS)
+            time_hearing = 0
+            time_not_hearing = 0
 
-        while time_hearing < TIME_TO_RESPOND:
             timestamp = time.time()
-            # little endian, signed short
-            sound_data = array('h', stream.read(CHUNK_SIZE))
-            if byteorder == 'big':
-                sound_data.byteswap()
+            while time_hearing < TIME_TO_RESPOND:
+                # little endian, signed short
+                sound_data = array('h', stream.read(CHUNK_SIZE))
+                if byteorder == 'big':
+                    sound_data.byteswap()
 
-            if is_loud(sound_data, threshold):
-                time_not_hearing = 0
-                time_hearing += time.time() - timestamp
-                log("Sound for %f seconds" % time_hearing)
-                if time_hearing > 5:
-                    print "Sound for %f seconds" % time_hearing
-            else:
-                time_not_hearing += time.time() - timestamp
-                #log("Stop hearing sound")
-                if time_not_hearing > .1:
-                    time_hearing = 0
+                now = time.time()
+                if is_loud(sound_data, threshold):
+                    time_not_hearing = 0
+                    time_hearing += now - timestamp
+                    #print "Time hearing: %f" % time_hearing
+                else:
+                    time_not_hearing += now - timestamp
+                    if time_not_hearing > .1:
+                        time_hearing = 0
+                timestamp = now
+
+            if spi:
+                lights.fill(0, 0, 0)
+                lights.update(spi)
+                time.sleep(.001)
 
     send_messages()
 
