@@ -62,7 +62,7 @@ class StopSoundSite(object):
         self.STOPSOUND_URL = 'http://stopsound.herokuapp.com/'
         self.CONTACTS_URL = self.STOPSOUND_URL + 'contacts/get_actives/'
         self.LOGIN_URL = self.STOPSOUND_URL + 'auth/login/'
-        self.SETTING_URLS = self.STOPSOUND_URL + 'contacts/view_settings/'
+        self.SETTINGS_URL = self.STOPSOUND_URL + 'contacts/settings/'
         self.CREDS = creds
 
     @contextmanager
@@ -183,12 +183,18 @@ def get_ambient_threshold():
 if __name__ == '__main__':
     print "Sound monitor -- Stop Sound -- Nu Pledge Class -- GOOOOO"
     threshold = get_ambient_threshold()
-    print "Threshold is currently at %f" % threshold
 
     with open('creds.json', 'r') as f_:
         creds = json.load(f_)
         stop_sound_site = StopSoundSite(creds)
 
+    sound_level_coef = stop_sound_site.get_settings()['sound_level']
+    print "Before managing the settings, threshold is: %f" % threshold
+    if threshold > 0:
+        # TODO If threshold is negative... idk
+        threshold = threshold * sound_level_coef
+
+    print "Threshold is currently at %f" % threshold
     with spi_opener() as spi:
         while True:
             print "Monitoring Sound"
