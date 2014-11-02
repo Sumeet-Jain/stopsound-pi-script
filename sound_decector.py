@@ -21,11 +21,12 @@ def log(string):
         print string
 
 
-AMBIENT_SOUND_TIME = 10
 CHUNK_SIZE = 512
 FORMAT = pyaudio.paInt16
 RATE = 44100
 TIME_TO_RESPOND = 5
+AMBIENT_SOUND_TIME = 10
+QUIET_REST_TIME = .5
 
 STOPSOUND_URL = 'http://stopsound.herokuapp.com/'
 CONTACTS_URL = STOPSOUND_URL + 'contacts/get_actives/'
@@ -114,35 +115,33 @@ def respond_to_loud_sound():
 
 def monitor_sound(threshold, lights, spi):
     with recorder() as stream:
-        with spi_opener() as spi:
-            time_hearing = 0
-            time_not_hearing = 0
+        time_hearing = 0
+        time_not_hearing = 0
 
-            timestamp = time.time()
-            while time_hearing < TIME_TO_RESPOND:
-                try:
-                    sound_data = array('h', stream.read(CHUNK_SIZE))
-                    # little endian, signed short
-                    if byteorder == 'big':
-                        sound_data.byteswap()
-                    now = time.time()
+        timestamp = time.time()
+        while time_hearing < TIME_TO_RESPOND:
+            try:
+                sound_data = array('h', stream.read(CHUNK_SIZE))
+                # little endian, signed short
+                if byteorder == 'big':
+                    sound_data.byteswap()
+                now = time.time()
 
-                    if is_loud(sound_data, threshold):
-                        time_not_hearing = 0
-                        time_hearing += now - timestamp
-                        #print "Time hearing: %f" % time_hearing
-                    else:
-                        time_not_hearing += now - timestamp
-                        if time_not_hearing > .1:
-                            time_hearing = 0
-                    timestamp = now
-                except IOError:
-                    pass
-                finally:
-                    if spi:
-                        lights.fill(0, 0, 0)
-                        lights.update(spi)
-                        time.sleep(.001)
+                if is_loud(sound_data, threshold):
+                    time_not_hearing = 0
+                    time_hearing += now - timestamp
+                    #print "Time hearing: %f" % time_hearing
+                else:
+                    time_not_hearing += now - timestamp
+                    if time_not_hearing > QUIET_REST_TIME:
+                        time_hearing = 0
+                timestamp = now
+            except IOError:
+                pass
+            finally:
+                if spi:
+                    lights.fill(0, 0, 0)
+                    lights.update(spi)
 
 
 def get_ambient_threshold():
@@ -184,7 +183,7 @@ if __name__ == '__main__':
                     lights.fill(254, 0, 0)
                     lights.update(spi)
                     time.sleep(.001)
-                    lights.fill(254, 0, 0)
+                    lights.fill(0, 0, 0)
                     lights.update(spi)
                     time.sleep(.001)
             time.sleep(5)
