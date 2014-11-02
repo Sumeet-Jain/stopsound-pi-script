@@ -35,7 +35,7 @@ LOGIN_URL = STOPSOUND_URL + 'auth/login/'
 LEDS = 32
 
 class LightsController(object):
-    
+
     def __init__(self, num_leds):
         self.num_leds = num_leds
         # Converts rgb values to right byte values.
@@ -161,7 +161,7 @@ def get_ambient_threshold():
             samples += 1.0
 
     ambient_sound = ambient_sound / samples
-    return ambient_sound + 100
+    return ambient_sound + 50
 
 if __name__ == '__main__':
     print "Sound monitor -- Stop Sound -- Nu Pledge Class -- GOOOOO"
@@ -182,8 +182,8 @@ if __name__ == '__main__':
                 while time.time() - start < 10:
                     lights.fill(254, 0, 0)
                     lights.update(spi)
-                    time.sleep(.001)
+                    time.sleep(.1)
                     lights.fill(0, 0, 0)
                     lights.update(spi)
-                    time.sleep(.001)
+                    time.sleep(.1)
             time.sleep(5)
