@@ -25,7 +25,7 @@ AMBIENT_SOUND_TIME = 10
 CHUNK_SIZE = 512
 FORMAT = pyaudio.paInt16
 RATE = 44100
-TIME_TO_RESPOND = 20
+TIME_TO_RESPOND = 5
 
 STOPSOUND_URL = 'http://stopsound.herokuapp.com/'
 CONTACTS_URL = STOPSOUND_URL + 'contacts/get_actives/'
@@ -45,8 +45,9 @@ class LightsController(object):
 
     def fill(self, r, g, b):
         for led in self.led_buffer:
-            led[0] = self.gamma[r]
-            led[1] = self.gamma[g]
+            # For some reason, colors get passed in the form (g, r, b).
+            led[0] = self.gamma[g]
+            led[1] = self.gamma[r]
             led[2] = self.gamma[b]
 
     def update(self, spi):
@@ -111,10 +112,9 @@ def is_loud(sound_data, threshold):
 def respond_to_loud_sound():
     send_messages()
 
-def monitor_sound(threshold):
+def monitor_sound(threshold, lights, spi):
     with recorder() as stream:
         with spi_opener() as spi:
-            lights = LightsController(LEDS)
             time_hearing = 0
             time_not_hearing = 0
 
@@ -130,7 +130,7 @@ def monitor_sound(threshold):
                     if is_loud(sound_data, threshold):
                         time_not_hearing = 0
                         time_hearing += now - timestamp
-                        #print "Time hearing: %f" % time_hearing
+                        print "Time hearing: %f" % time_hearing
                     else:
                         time_not_hearing += now - timestamp
                         if time_not_hearing > .1:
@@ -144,7 +144,6 @@ def monitor_sound(threshold):
                         lights.update(spi)
                         time.sleep(.001)
 
-    send_messages()
 
 def get_ambient_threshold():
     ambient_sound = 0
@@ -173,7 +172,19 @@ if __name__ == '__main__':
     with open('creds.json', 'r') as f_:
         CREDS = json.load(f_)
 
-    while True:
-        print "Monitoring Sound"
-        monitor_sound(threshold)
-        time.sleep(10)
+    with spi_opener() as spi:
+        while True:
+            print "Monitoring Sound"
+            lights = LightsController(LEDS)
+            monitor_sound(threshold, lights, spi)
+            send_messages()
+            start = time.time()
+            if spi:
+                while time.time() - start < 10:
+                    lights.fill(254, 0, 0)
+                    lights.update()
+                    time.sleep(.001)
+                    lights.fill(254, 0, 0)
+                    lights.update()
+                    time.sleep(.001)
+            time.sleep(5)
