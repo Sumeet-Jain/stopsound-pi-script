@@ -224,6 +224,7 @@ if __name__ == '__main__':
     if not stop_sound_site.check_internet_connection():
         print "No Internet. Strobing Light then turning off"
         with spi_opener() as spi:
+            start = time.time()
             while time.time() - start < STROBE_LIGHT / 2:
                 lights.fill(0, 0, 254)
                 lights.update(spi)
