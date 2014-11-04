@@ -31,7 +31,6 @@ To ensure the script runs, make sure to include a creds.json in the directory in
 {
 
   "stopsound_username": username on stopsound.herokuapp.com, 
-
   "stopsound_password": pw for stopsound account
 }
 ```
@@ -42,8 +41,9 @@ Details
 -------
 The script does the following things in order:
 
-1. Figures out the ambient sound level of the room. It does this by averaging the max sound for x seconds, dictated by the `AMBIENT_SOUND_TIME` constant.
-2. It then modifies the ambient basehold by some number dictated by the stopsound website. See the website repo for more information.
-3. It then monitors sound by taking the max of each sample. If it hasn't heard a loud enough sound in `QUIET_REST_TIME` seconds, it will reset the time heard counter.
-4. After the stopsound has deteected sound for `TIME_TO_RESPOND` seconds, it will alert the specified users through sms messaging. The users it will alert are dictated by the stopsound website. Then, stopsound will strobe its lights for `STROBE_LIGHT` seconds. 
-5. Then, to reduce noise, stopsound will sleep for `STOP_DELAY_MINS` minutes, and repeated from number 3 again.
+1. Checks if the device has internet. If it doesn't have internet, then it will strobe a blue light for `AMBIENT_SOUND_TIME/2` seconds, and then it will stop the script.
+2. Figures out the ambient sound level of the room. It does this by averaging the max sound for x seconds, dictated by the `AMBIENT_SOUND_TIME` constant.
+3. It then modifies the ambient basehold by some number dictated by the stopsound website. See the website repo for more information.
+4. It then monitors sound by taking the max of each sample. If it hasn't heard a loud enough sound in `QUIET_REST_TIME` seconds, it will reset the time heard counter.
+5. After the stopsound has deteected sound for `TIME_TO_RESPOND` seconds, it will alert the specified users through sms messaging. The users it will alert are dictated by the stopsound website. Then, stopsound will strobe its lights for `STROBE_LIGHT` seconds. 
+6. Then, to reduce noise, stopsound will sleep for `STOP_DELAY_MINS` minutes, and repeats from number 3 again.
