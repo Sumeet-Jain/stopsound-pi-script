@@ -29,7 +29,7 @@ RATE = 44100
 
 TIME_TO_RESPOND = 10
 AMBIENT_SOUND_TIME = 10
-QUIET_REST_TIME = .25
+QUIET_REST_TIME = .5
 STOP_DELAY_MINS = 10
 STROBE_LIGHT = 20
 
@@ -140,11 +140,9 @@ def monitor_sound(threshold, lights, spi):
                     sound_data.byteswap()
 
                 now = time.time()
-                print max(sound_data)
                 if is_loud(sound_data, threshold):
                     time_not_hearing = 0
                     time_hearing += now - timestamp
-                    print "Time hearing: %f" % time_hearing
                 else:
                     time_not_hearing += now - timestamp
                     if time_not_hearing > QUIET_REST_TIME:

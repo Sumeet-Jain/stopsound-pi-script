@@ -5,6 +5,14 @@ This is the Raspberry Pi script for StopSound. It monitors the sound levels in a
 For example, if you are studying in your room and your flatmates are blasting music, Stop Sound can be used to mitigate the awkwardness and the pain of 
 alerting your roommates to quiet down. 
 
+
+How To Use
+----------
+
+1. SSH into the pi or setup to some sort of monitor and keyboard.
+2. Make sure the microphone is plugged in.
+3. Run the script. `python sound_dectector.py`
+
 Setup
 -----
 To install dev dependencies:
