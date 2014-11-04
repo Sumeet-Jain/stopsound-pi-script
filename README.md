@@ -1,6 +1,12 @@
 stopsound-pi-script
 ===================
 
+This is the Raspberry Pi script for StopSound. It monitors the sound levels in a room and sends out text messages if the room gets too loud.
+For example, if you are studying in your room and your flatmates are blasting music, Stop Sound can be used to mitigate the awkwardness and the pain of 
+alerting your roommates to quiet down. 
+
+Setup
+-----
 To install dev dependencies:
 
 1.  Create a virtualenv
@@ -26,7 +32,6 @@ To be able to send the messages, the account on stopsound must be a superuser. C
 
 Details
 -------
-
 The script does the following things in order:
 
 1. Figures out the ambient sound level of the room. It does this by averaging the max sound for x seconds, dictated by the `AMBIENT_SOUND_TIME` constant.
