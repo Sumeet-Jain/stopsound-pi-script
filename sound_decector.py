@@ -6,7 +6,6 @@ from sys import byteorder
 import time
 
 from  bs4 import BeautifulSoup
-from googlevoice import Voice
 import pyaudio
 import requests
 try:
@@ -28,9 +27,11 @@ CHUNK_SIZE = 512
 FORMAT = pyaudio.paInt16
 RATE = 44100
 
-TIME_TO_RESPOND = 5
+TIME_TO_RESPOND = 10
 AMBIENT_SOUND_TIME = 10
-QUIET_REST_TIME = .5
+QUIET_REST_TIME = .25
+STOP_DELAY_MINS = 10
+STROBE_LIGHT = 20
 
 LEDS = 32
 
@@ -60,7 +61,7 @@ class StopSoundSite(object):
 
     def __init__(self, creds):
         self.STOPSOUND_URL = 'http://stopsound.herokuapp.com/'
-        self.CONTACTS_URL = self.STOPSOUND_URL + 'contacts/get_actives/'
+        self.SEND_MESSAGES_URL = self.STOPSOUND_URL + 'contacts/send_messages/'
         self.LOGIN_URL = self.STOPSOUND_URL + 'auth/login/'
         self.SETTINGS_URL = self.STOPSOUND_URL + 'contacts/settings/'
         self.CREDS = creds
@@ -75,10 +76,10 @@ class StopSoundSite(object):
             for input_ in soup.find_all('input'):
                 if 'name' in input_.attrs and input_.attrs['name'] == 'csrfmiddlewaretoken':
                     token = input_['value']
-                    break;
+                    break
 
             login_data = {}
-            login_data['csrfmiddlewaretoken'] =  token
+            login_data['csrfmiddlewaretoken'] = token
             login_data['username'] = self.CREDS['stopsound_username']
             login_data['password'] = self.CREDS['stopsound_password']
             login_resp = sesh.post(self.LOGIN_URL, data=login_data)
@@ -88,13 +89,9 @@ class StopSoundSite(object):
 
     def send_messages(self):
         with self.login() as sesh:
-            voice = Voice()
-            voice.login(email=self.CREDS['googlevoice_email'], passwd=self.CREDS['googlevoice_password'])
-            contacts = sesh.get(self.CONTACTS_URL)
-            for name, number in contacts.json().items():
-                print( "sending a message to %s" % name)
-                voice.send_sms(number, "Dear %s, Stop Sound is notifying that you may be too loud. Contact your nearest neighbor." % name)
-                print("finished")
+            resp = sesh.get(self.SEND_MESSAGES_URL)
+            assert(resp.status_code == 200)
+
 
     def get_settings(self):
         with self.login() as sesh:
@@ -143,10 +140,11 @@ def monitor_sound(threshold, lights, spi):
                     sound_data.byteswap()
 
                 now = time.time()
+                print max(sound_data)
                 if is_loud(sound_data, threshold):
                     time_not_hearing = 0
                     time_hearing += now - timestamp
-                    #print "Time hearing: %f" % time_hearing
+                    print "Time hearing: %f" % time_hearing
                 else:
                     time_not_hearing += now - timestamp
                     if time_not_hearing > QUIET_REST_TIME:
@@ -169,15 +167,19 @@ def get_ambient_threshold():
     with recorder() as stream:
         start = time.time()
         while time.time() - start < AMBIENT_SOUND_TIME:
-            sound_data = array('h', stream.read(CHUNK_SIZE))
-            if byteorder == 'big':
-                sound_data.byteswap()
-            ambient_sound += max(sound_data)
-            log(max(sound_data))
-            samples += 1.0
+            try:
+                sound_data = array('h', stream.read(CHUNK_SIZE))
+                if byteorder == 'big':
+                    sound_data.byteswap()
+                ambient_sound += max(sound_data)
+                log(max(sound_data))
+                samples += 1.0
+            except IOError:
+                # TODO Make this a smarter error. Only for input overflow
+                pass 
 
     ambient_sound = ambient_sound / samples
-    return ambient_sound + 50
+    return ambient_sound + abs(ambient_sound)*.10 + 50
 
 
 if __name__ == '__main__':
@@ -194,20 +196,24 @@ if __name__ == '__main__':
         # TODO If threshold is negative... idk
         threshold = threshold * sound_level_coef
 
+
     print "Threshold is currently at %f" % threshold
     with spi_opener() as spi:
         while True:
             print "Monitoring Sound"
             lights = LightsController(LEDS)
             monitor_sound(threshold, lights, spi)
+            print "Detected sound. Sending Messages"
             stop_sound_site.send_messages()
+            print "Finished sending messages"
             start = time.time()
+            print "Strobing"
             if spi:
-                while time.time() - start < 10:
+                while time.time() - start < STROBE_LIGHT:
                     lights.fill(254, 0, 0)
                     lights.update(spi)
                     time.sleep(.1)
                     lights.fill(0, 0, 0)
                     lights.update(spi)
                     time.sleep(.1)
-            time.sleep(5)
+            time.sleep(60*STOP_DELAY_MINS)
