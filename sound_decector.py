@@ -30,7 +30,7 @@ RATE = 44100
 
 TIME_TO_RESPOND = 10
 AMBIENT_SOUND_TIME = 10
-QUIET_REST_TIME = .5
+QUIET_REST_TIME = .35
 STOP_DELAY_MINS = 1
 STROBE_LIGHT = 20
 
@@ -60,11 +60,11 @@ class LightsController(object):
         final_buff.append(0)
         spi.xfer(final_buff)
 
-    def strobe(self, r, g, b, time, spi):
+    def strobe(self, r, g, b, end_time, spi):
         if not spi:
             return
         start = time.time()
-        while time.time() - start < time:
+        while time.time() - start < end_time:
             self.fill(r, g, b)
             self.update(spi)
             time.sleep(.1)
@@ -208,8 +208,8 @@ def get_ambient_threshold():
                 # TODO Make this a smarter error. Only for input overflow
                 print "IOerror"
 
-    ambient_sound = ambient_sound / samples
-    return ambient_sound + abs(ambient_sound)*.10 + 50
+    ambient_sound = (ambient_sound / samples) + 50
+    return ambient_sound + abs(ambient_sound)*.10
 
 
 if __name__ == '__main__':
@@ -248,4 +248,5 @@ if __name__ == '__main__':
             start = time.time()
             print "Strobing"
             lights.strobe(254, 0, 0, STROBE_LIGHT, spi)
+            print "Sleeping for {0}".format(60*STOP_DELAY_MINS)
             time.sleep(60*STOP_DELAY_MINS)
