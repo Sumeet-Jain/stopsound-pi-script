@@ -28,11 +28,11 @@ CHUNK_SIZE = 512
 FORMAT = pyaudio.paInt16
 RATE = 44100
 
-TIME_TO_RESPOND = 10
-AMBIENT_SOUND_TIME = 10
+TIME_TO_RESPOND = 15
+AMBIENT_SOUND_TIME = 20
 QUIET_REST_TIME = .35
-STOP_DELAY_MINS = 1
-STROBE_LIGHT = 20
+STOP_DELAY_MINS = 5
+STROBE_LIGHT = 30
 
 LEDS = 32
 
@@ -76,10 +76,12 @@ class StopSoundSite(object):
 
     def __init__(self, creds):
         self.STOPSOUND_URL = 'http://stopsound.herokuapp.com/'
+        #self.STOPSOUND_URL = 'http://localhost:8000/'
         self.SEND_MESSAGES_URL = self.STOPSOUND_URL + 'contacts/send_messages/'
         self.LOGIN_URL = self.STOPSOUND_URL + 'auth/login/'
         self.SETTINGS_URL = self.STOPSOUND_URL + 'contacts/settings/'
         self.CREDS = creds
+        self.UPDATE_SETTINGS = self.STOPSOUND_URL + 'contacts/update_settings/'
 
     def check_internet_connection(self):
         try:
@@ -89,17 +91,19 @@ class StopSoundSite(object):
             pass
         return False
 
+    def get_csrf_token(self, html):
+        soup = BeautifulSoup(html)
+        for input_ in soup.find_all('input'):
+            if 'name' in input_.attrs and input_.attrs['name'] == 'csrfmiddlewaretoken':
+                return input_['value']
+
     @contextmanager
     def login(self):
         with requests.Session() as sesh:
             login_page = sesh.get(self.LOGIN_URL)
 
             # Grab csrf token from the form
-            soup = BeautifulSoup(login_page.text)
-            for input_ in soup.find_all('input'):
-                if 'name' in input_.attrs and input_.attrs['name'] == 'csrfmiddlewaretoken':
-                    token = input_['value']
-                    break
+            token = self.get_csrf_token(login_page.text)
 
             login_data = {}
             login_data['csrfmiddlewaretoken'] = token
@@ -115,12 +119,17 @@ class StopSoundSite(object):
             resp = sesh.get(self.SEND_MESSAGES_URL)
             resp.raise_for_status()
 
-
     def get_settings(self):
         with self.login() as sesh:
             settings_resp = sesh.get(self.SETTINGS_URL)
             settings_resp.raise_for_status()
             return settings_resp.json()
+    
+    def update_settings(self, threshold):
+        with self.login() as sesh:
+            update_settings_form = sesh.get(self.UPDATE_SETTINGS)
+            token = self.get_csrf_token(update_settings_form.text)
+            sesh.post(self.UPDATE_SETTINGS, data={'sound_level': threshold, 'csrfmiddlewaretoken': token})
 
 
 @contextmanager
@@ -150,7 +159,9 @@ def recorder():
     stream = p.open(format=FORMAT, channels=1, rate=RATE,
         input=True, output=True,
         frames_per_buffer=CHUNK_SIZE)
+
     yield stream
+
     stream.stop_stream()
     stream.close()
     p.terminate()
@@ -172,6 +183,7 @@ def monitor_sound(threshold, lights, spi):
                     sound_data.byteswap()
 
                 now = time.time()
+                print max(sound_data), threshold
                 if is_loud(sound_data, threshold):
                     time_not_hearing = 0
                     time_hearing += now - timestamp
@@ -229,16 +241,23 @@ if __name__ == '__main__':
                 lights.fill(0, 0, 254)
                 lights.update(spi)
             lights.strobe(0, 0, 0, 1, spi)
-            quit()
+            quit() # Exits the program
     else:
         print "Has Internet. Continuing"
 
-    threshold = get_ambient_threshold()
-    sound_level_coef = stop_sound_site.get_settings()['sound_level']
-    print "Before managing the settings, threshold is: %f" % threshold
-    if threshold > 0:
-        # TODO If threshold is negative... idk
-        threshold = threshold * sound_level_coef
+    print "Getting Settings"
+    settings = stop_sound_site.get_settings()
+    if settings['use_website_sound']:
+        threshold = settings['sound_level']
+    else:
+        threshold = get_ambient_threshold()
+        sound_level_coef = settings['sound_coefficent']
+        if threshold > 0:
+            # TODO If threshold is negative... idk
+            threshold = threshold * sound_level_coef
+        if settings['threshold_method'] == 'auto-save':
+            print "Saving Settings"
+            stop_sound_site.update_settings(threshold)
     print "Threshold is currently at %f" % threshold
 
     with spi_opener() as spi:
