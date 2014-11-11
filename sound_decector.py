@@ -183,7 +183,6 @@ def monitor_sound(threshold, lights, spi):
                     sound_data.byteswap()
 
                 now = time.time()
-                print max(sound_data), threshold
                 if is_loud(sound_data, threshold):
                     time_not_hearing = 0
                     time_hearing += now - timestamp
